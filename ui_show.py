@@ -1,7 +1,6 @@
 from nicegui import ui
 from datetime import datetime, date, timedelta
 import hashlib, json
-from data_fetch import DataBase
 from nicegui_toolkit import inject_layout_tool
 # inject_layout_tool()
 
@@ -123,27 +122,28 @@ class UIRenderer():
             today = date.today()
             first_day_of_month = today.replace(day=1)
             last_day_of_month = (first_day_of_month.replace(month=first_day_of_month.month % 12 + 1, day=1) - timedelta(days=1))
-
+    
             start_date_str = first_day_of_month.strftime("%Y-%m-%d")
             end_date_str = last_day_of_month.strftime("%Y-%m-%d")
-
+    
         self.inited = True
 
         usage = self.db.load_data_range(start_date_str, end_date_str)
-
-        # Prepare data for Highcharts
-        categories_list = list(usage.keys())
+    
+        # 依时长从高到低排序，过滤低于0.01小时应用
+        sorted_usage = [(app, total) for app, total in sorted(usage.items(), key=lambda x: x[1], reverse=True) if total >= 0.01][:10]
+        categories_list = [app for app, _ in sorted_usage]
         categories = json.dumps(categories_list, ensure_ascii=False)
         series_data = [
             {
-                "y": round(usage[app], 2),
+                "y": round(total, 2),
                 "color": self.hash_color(app),
                 "name": app
             }
-            for app in categories_list
+            for app, total in sorted_usage
         ]
         chart_data = json.dumps(series_data, ensure_ascii=False)
-
+    
         # Inject JavaScript to render the bar chart
         ui.run_javascript(f"""
             window.periodChart = Highcharts.chart('period-gantt-graph', {{
@@ -170,15 +170,15 @@ class UIRenderer():
                 tooltip: {{
                     formatter: function() {{
                         return '<span style="color:' + this.point.color + '">\u25CF</span> ' +
-                               '<b>' + this.point.name + '</b><br/>' +
-                               this.y.toFixed(2) + ' hours';
+                            '<b>' + this.point.name + '</b><br/>' +
+                            this.y.toFixed(2) + ' hours';
                     }}
                 }},
                 plotOptions: {{
                     column: {{
                         dataLabels: {{
                             enabled: true,
-                            format: '{'{point.y:.1f}'}'
+                            format: '{'{point.y:.2f}'}'
                         }}
                     }}
                 }},
@@ -209,13 +209,13 @@ class UIRenderer():
     def create_interface(self):
         with ui.header(elevated=True).style('background-color: #3874c8; padding-top: 2px; padding-bottom: 2px;').classes('items-center justify-between'):
             ui.label('ManicRead').style('font-size: 24px; font-weight: bold;')
-            with ui.tabs(on_change=self.period_render) as tabs:
-                ui.tab('Per Day', icon='schedule').props('no-caps style="font-size: 10px;"')
-                ui.tab('Total', icon='equalizer').props('no-caps style="font-size: 10px;"')
+            with ui.tabs(on_change=lambda e: self.period_render() if e.value == 'Period' else None) as tabs:
+                ui.tab('Daily', icon='schedule').props('no-caps style="font-size: 10px;"')
+                ui.tab('Period', icon='equalizer').props('no-caps style="font-size: 10px;"')
 
         # 页面创建
-        with ui.tab_panels(tabs, value='Per Day').style('align-self: stretch;'):
-            with ui.tab_panel('Per Day'):
+        with ui.tab_panels(tabs, value='Daily').style('align-self: stretch;'):
+            with ui.tab_panel('Daily'):
                 with ui.column().style('align-self: stretch;'):
                     with ui.button(icon='calendar_month').props('round flat color="white').tooltip('Select a date'):
                         with ui.menu():
@@ -228,7 +228,7 @@ class UIRenderer():
                     # 初次进入渲染当天数据
                     ui.timer(0.1, self.daily_render, once=True)
 
-            with ui.tab_panel('Total'):
+            with ui.tab_panel('Period'):
                 with ui.column().style('align-self: stretch;'):
                     with ui.button(icon='calendar_month').props('round flat color="white').tooltip('Select a date'):
                         with ui.menu():
