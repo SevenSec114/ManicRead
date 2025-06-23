@@ -1,2 +1,6 @@
 # ManicRead
-so why there isnt any repositories to do just like manictime on Win🤔
+> AAAAAAAAAAarch~~
+
+## changelog
+- 2025.06.23
+    - 数据读取和页面内容基本完成
