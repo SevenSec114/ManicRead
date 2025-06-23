@@ -209,7 +209,7 @@ class UIRenderer():
     def create_interface(self):
         with ui.header(elevated=True).style('background-color: #3874c8; padding-top: 2px; padding-bottom: 2px;').classes('items-center justify-between'):
             ui.label('ManicRead').style('font-size: 24px; font-weight: bold;')
-            with ui.tabs(on_change=renderer.period_render) as tabs:
+            with ui.tabs(on_change=self.period_render) as tabs:
                 ui.tab('Per Day', icon='schedule').props('no-caps style="font-size: 10px;"')
                 ui.tab('Total', icon='equalizer').props('no-caps style="font-size: 10px;"')
 
@@ -219,13 +219,14 @@ class UIRenderer():
                 with ui.column().style('align-self: stretch;'):
                     with ui.button(icon='calendar_month').props('round flat color="white').tooltip('Select a date'):
                         with ui.menu():
+                            formatted_dates = {datetime.strptime(date_str, "%Y-%m-%d").strftime("%Y/%m/%d") for date_str in self.db.get_available_dates()}
                             ui.date(value=date.today(), on_change=self.daily_chart_update).style('align-self: center;').props(f'''options="{formatted_dates}"''')
 
                     ui.card().style('align-self: stretch;').props('id=daily-gantt-graph') # 图像显示容器
                     self.daily_total_statistics_container = ui.element().style('align-self: stretch;')  # 当日时长总统计容器
 
                     # 初次进入渲染当天数据
-                    ui.timer(0.1, renderer.daily_render, once=True)
+                    ui.timer(0.1, self.daily_render, once=True)
 
             with ui.tab_panel('Total'):
                 with ui.column().style('align-self: stretch;'):
@@ -234,31 +235,3 @@ class UIRenderer():
                             ui.date({'from': str(datetime.now().replace(day=1).date()), 'to': str(datetime.now().date())}, on_change=self.period_chart_update).style('align-self: center;').props('range')
                     
                     ui.card().style('align-self: stretch;').props('id=period-gantt-graph') # 阶段时长总统计容器
-
-            
-
-
-
-
-
-
-
-if __name__ in {'__main__', '__mp_main__'}:
-    db_path = "/home/syam/.config/manictime/ManicTimeReports.db"
-    db = DataBase(db_path)
-    renderer = UIRenderer(db)
-
-    formatted_dates = {datetime.strptime(date_str, "%Y-%m-%d").strftime("%Y/%m/%d") for date_str in db.get_available_dates()}
-
-    # 加载 Highcharts 模块
-    ui.add_head_html("""
-        <script src="https://code.highcharts.com/highcharts.js"></script>
-        <script src="https://code.highcharts.com/highcharts-more.js"></script>
-        <script src="https://code.highcharts.com/modules/xrange.js"></script>
-        <script src="https://code.highcharts.com/modules/exporting.js"></script>
-        <script src="https://code.highcharts.com/modules/accessibility.js"></script>
-    """)
-
-    renderer.create_interface()
-
-    ui.run()
