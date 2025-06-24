@@ -1,5 +1,5 @@
 # ManicRead
-> AAAAAAAAAAarch~~
+> still ongoing project | 开发中
 
 ## Overview
 Linux 版本的 ManicTime 本地端本身不支持渲染 UI，只提供了各程式的 timeline 追踪，最终会生成 `sqlite` 文件，通常位于 `~/.config/manictime/` 中，并伴随着 `Screenshots` 一并储存。
