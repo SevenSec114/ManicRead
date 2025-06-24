@@ -1,5 +1,5 @@
 from nicegui import ui
-from datetime import datetime, date, timedelta
+from datetime import datetime, date
 import hashlib, json
 from nicegui_toolkit import inject_layout_tool
 # inject_layout_tool()
@@ -13,14 +13,43 @@ class UIRenderer():
         pass
 
     def hash_color(self, name):
+        if name == 'Away':
+            return '#ff0000'
+        elif name == 'Session lock':
+            return '#000000'
         h = hashlib.md5(name.encode()).hexdigest()
         r = int(h[0:2], 16)
         g = int(h[2:4], 16)
         b = int(h[4:6], 16)
         return f'#{r:02x}{g:02x}{b:02x}'
     
+    def count_animate(self, label, h, m, s):
+        """
+        统计时长的增长动画
+        """
+        from time import time
+        start = time()
+        duration = 1.5  # 动画时长（秒）
+        def update(h=h, m=m, s=s):
+            now = time()
+            t = min((now - start) / duration, 1.0)
+            # 使用 ease-out 缓动函数
+            t = 1 - (1 - t) ** 3
+            cur_seconds = int(t * (h * 3600 + m * 60 + s))
+            h = cur_seconds // 3600
+            m = (cur_seconds % 3600) // 60
+            s = cur_seconds % 60
+            label.text = f"{h:02d}:{m:02d}:{s:02d}"
+            if t < 1.0:
+                ui.timer(0.02, update, once=True)
+            else:
+                label.text = f"{h:02d}:{m:02d}:{s:02d}"
+        update()
+    
     def daily_render(self, date_str=str(date.today())):
-        segments, usage = self.db.load_data(date_str)
+        common_segments, usage = self.db.load_data(date_str)
+        lock_segments = self.db.load_lock_data(date_str)
+        segments = common_segments + lock_segments
 
         # 合并相邻同名且时间连续的 segments
         merged_segments = []
@@ -35,13 +64,17 @@ class UIRenderer():
         if self.daily_total_statistics_container:
             with self.daily_total_statistics_container:
                 self.daily_total_statistics_container.clear()
-                with ui.card().style('align-self: stretch;'):
+                with ui.card().style('align-self: stretch; animation: fade-out 1s ease forwards'):
                     ui.label("Usage Summary").classes('text-h6').style('align-self: center;')
                     for app, total_hours in sorted(usage.items(), key=lambda x: x[1], reverse=True):
                         hours = int(total_hours)
                         minutes = int((total_hours - hours) * 60)
                         seconds = int(((total_hours - hours) * 60 - minutes) * 60)
-                        ui.label(f"{app}: {hours:02d}:{minutes:02d}:{seconds:02d}").classes('ml-4').style('align-self: end;')
+                        with ui.row().style('align-self: end'):
+                            ui.label('■').style(f'color: {self.hash_color(app)}; margin-right: -10px;')
+                            ui.label(f"{app}:").classes('ml-4').style('align-self: end; margin-left: 0; margin-right: -10px;')
+                            label = ui.label(f"00:00:00").classes('ml-4').style('align-self: end; margin-left: 0;')
+                            self.count_animate(label, hours, minutes, seconds)
 
         if not segments:
             date_str = ''
@@ -119,12 +152,8 @@ class UIRenderer():
 
     def period_render(self, start_date_str=None, end_date_str=None):
         if not start_date_str or not end_date_str and not self.inited:
-            today = date.today()
-            first_day_of_month = today.replace(day=1)
-            last_day_of_month = (first_day_of_month.replace(month=first_day_of_month.month % 12 + 1, day=1) - timedelta(days=1))
-    
-            start_date_str = first_day_of_month.strftime("%Y-%m-%d")
-            end_date_str = last_day_of_month.strftime("%Y-%m-%d")
+            start_date_str = str(datetime.now().replace(day=1).date())
+            end_date_str = str(datetime.now().date())
     
         self.inited = True
 

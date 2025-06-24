@@ -8,6 +8,17 @@ db = DataBase(db_path)
 renderer = UIRenderer(db)
 
 # 加载 Highcharts 模块
+ui.add_css("""
+    @keyframes fade-out {
+        from {
+           opacity: 0;
+        }
+        to {
+           opacity: 1;
+        }
+    }
+""")
+
 ui.add_head_html("""
     <script src="https://code.highcharts.com/highcharts.js"></script>
     <script src="https://code.highcharts.com/highcharts-more.js"></script>
@@ -18,4 +29,4 @@ ui.add_head_html("""
 
 renderer.create_interface()
 
-ui.run()
+ui.run(title='ManicRead')
