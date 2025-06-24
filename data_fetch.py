@@ -12,10 +12,14 @@ class DataBase():
         """
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
+
+        # 映射 CommonGroupId → 分组名称
         cursor.execute("SELECT CommonId, Name FROM Ar_CommonGroup")
         common_map = dict(cursor.fetchall())
+
+        # 提取活动记录，包括原始标题
         cursor.execute("""
-            SELECT CommonGroupId, StartLocalTime, EndLocalTime
+            SELECT CommonGroupId, StartLocalTime, EndLocalTime, Name
             FROM Ar_Activity
             WHERE CommonGroupId IS NOT NULL AND StartLocalTime LIKE ? AND EndLocalTime IS NOT NULL
         """, (f"{date_str}%",))
@@ -25,14 +29,16 @@ class DataBase():
         segments = []
         usage = defaultdict(float)
 
-        for gid, start, end in rows:
+        for gid, start, end, raw_title in rows:
             title = common_map.get(gid, "(unknown window)")
             t1 = datetime.fromisoformat(start)
             t2 = datetime.fromisoformat(end)
             if t2 > t1:
-                segments.append((title, int(t1.timestamp() * 1000), int(t2.timestamp() * 1000)))
+                segments.append((title, int(t1.timestamp() * 1000), int(t2.timestamp() * 1000), raw_title))
                 usage[title] += (t2 - t1).total_seconds() / 3600
+
         return segments, usage
+
     
     def load_lock_data(self, date_str):
         conn = sqlite3.connect(self.db_path)
@@ -59,7 +65,7 @@ class DataBase():
                     t1 = datetime.fromisoformat(start)
                     t2 = datetime.fromisoformat(end)
                     if t2 > t1:
-                        segments.append((name, int(t1.timestamp() * 1000), int(t2.timestamp() * 1000)))
+                        segments.append((name, int(t1.timestamp() * 1000), int(t2.timestamp() * 1000), '')) # 空字符串代表空 title
                 except Exception:
                     continue
         return segments

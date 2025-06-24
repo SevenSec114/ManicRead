@@ -1,7 +1,7 @@
 from nicegui import ui
 from datetime import datetime, date
 import hashlib, json
-from nicegui_toolkit import inject_layout_tool
+# from nicegui_toolkit import inject_layout_tool
 # inject_layout_tool()
 
 class UIRenderer():
@@ -56,7 +56,7 @@ class UIRenderer():
         for seg in segments:
             if merged_segments and seg[0] == merged_segments[-1][0] and seg[1] == merged_segments[-1][2]:
                 # 合并：更新end_ms
-                merged_segments[-1] = (merged_segments[-1][0], merged_segments[-1][1], seg[2])
+                merged_segments[-1] = (merged_segments[-1][0], merged_segments[-1][1], seg[2], seg[3])
             else:
                 merged_segments.append(seg)
         segments = merged_segments
@@ -64,7 +64,7 @@ class UIRenderer():
         if self.daily_total_statistics_container:
             with self.daily_total_statistics_container:
                 self.daily_total_statistics_container.clear()
-                with ui.card().style('align-self: stretch; animation: fade-out 1s ease forwards'):
+                with ui.card().style('align-self: stretch; height: 100%;'):
                     ui.label("Usage Summary").classes('text-h6').style('align-self: center;')
                     for app, total_hours in sorted(usage.items(), key=lambda x: x[1], reverse=True):
                         hours = int(total_hours)
@@ -85,15 +85,19 @@ class UIRenderer():
                 'x2': end_ms,
                 'y': 0,
                 'name': title,
-                'color': self.hash_color(title)
+                'color': self.hash_color(title),
+                'rawTitle': raw_title
             }
-            for title, start_ms, end_ms in segments
+            for title, start_ms, end_ms, raw_title in segments
         ]
         chart_data = json.dumps(data, ensure_ascii=False)
         categories = json.dumps([""], ensure_ascii=False)
 
         ui.run_javascript(f"""
             let chart = null;
+            let hoveredPoint = null;
+            let lastCursorTime = null;
+            const screenshot_container = document.getElementById('daily-screenshot-container');
             function initChart(data, date_str) {{
                 chart = Highcharts.chart('daily-gantt-graph', {{
                     time: {{
@@ -103,7 +107,7 @@ class UIRenderer():
                     title: {{ text: date_str + ' timeline' }},
                     xAxis: {{
                         type: 'datetime',
-                        title: {{ text: '时间' }},
+                        title: {{ text: 'time' }},
                         labels: {{ format: '{{value:%H:%M}}' }}
                     }},
                     yAxis: {{
@@ -115,10 +119,38 @@ class UIRenderer():
                         gridLineWidth: 0
                     }},
                     tooltip: {{
+                        useHTML: true,
                         formatter: function() {{
+                            let cursorTimeStr = '';
+                            if (lastCursorTime !== null) {{
+                                cursorTimeStr = '<br><b>current time:</b> ' + Highcharts.dateFormat('%H:%M:%S', lastCursorTime);
+                            }}
                             return '<b>' + this.point.name + '</b><br>' +
-                            Highcharts.dateFormat('%H:%M:%S', this.point.x) +
-                            ' → ' + Highcharts.dateFormat('%H:%M:%S', this.point.x2);
+                                Highcharts.dateFormat('%H:%M:%S', this.point.x) +
+                                ' → ' + Highcharts.dateFormat('%H:%M:%S', this.point.x2) +
+                                cursorTimeStr;
+                        }},
+                        positioner: function(labelWidth, labelHeight, point) {{
+                            // point.plotX/plotY 是相对于绘图区的坐标
+                            return {{
+                                x: point.plotX + this.chart.plotLeft - labelWidth / 2,
+                                y: point.plotY + this.chart.plotTop - labelHeight
+                            }};
+                        }}
+                    }},
+                    plotOptions: {{
+                        series: {{
+                            point: {{
+                                events: {{
+                                    mouseOver: function() {{
+                                        hoveredPoint = this;
+                                    }},
+                                    mouseOut: function() {{
+                                        hoveredPoint = null;
+                                        lastCursorTime = null;
+                                    }}
+                                }}
+                            }}
                         }}
                     }},
                     series: [{{
@@ -135,14 +167,31 @@ class UIRenderer():
                         enabled: true
                     }}
                 }});
-
+                chart.container.addEventListener('mousemove', function(e) {{
+                    if (hoveredPoint) {{
+                        const rawTitle = hoveredPoint?.rawTitle;
+                        const rect = chart.container.getBoundingClientRect();
+                        const x = e.clientX - rect.left;
+                        const axisValue = chart.xAxis[0].toValue(x, false);
+                        lastCursorTime = axisValue;
+                        chart.tooltip.refresh(hoveredPoint); // 强制刷新tooltip
+                        
+                        // 插入懒加载图片
+                        screenshot_container.innerHTML = `
+                            <div style="font-size: 20px;">${{rawTitle}}</div>
+                            <img src="/api/screenshot?date={date_str}&time=${{Highcharts.dateFormat('%H-%M-%S', lastCursorTime)}}" 
+                                loading="lazy"
+                                onerror="this.style.display='none'; this.remove();">
+                        `;
+                    }}
+                }});
                 Highcharts.setOptions({{
                     time: {{
                         timezoneOffset: -8 * 60
                     }}
                 }});
             }}
-
+        
             if (chart) {{
                 chart.series[0].setData({chart_data});
             }} else {{
@@ -252,7 +301,11 @@ class UIRenderer():
                             ui.date(value=date.today(), on_change=self.daily_chart_update).style('align-self: center;').props(f'''options="{formatted_dates}"''')
 
                     ui.card().style('align-self: stretch;').props('id=daily-gantt-graph') # 图像显示容器
-                    self.daily_total_statistics_container = ui.element().style('align-self: stretch;')  # 当日时长总统计容器
+                    with ui.row().style('align-self: stretch; animation: fade-out 1s ease forwards'):
+                        with ui.card().style('min-width: 60%; max-width: 60%; align-self: stretch;'):
+                            ui.label('Details').classes('text-h6').style('align-self: center;')
+                            ui.element().props('id=daily-screenshot-container')   # 对应时间点截图容器
+                        self.daily_total_statistics_container = ui.element().style('flex: 1; align-self: stretch;')  # 当日时长总统计容器
 
                     # 初次进入渲染当天数据
                     ui.timer(0.1, self.daily_render, once=True)
