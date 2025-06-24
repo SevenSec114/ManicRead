@@ -41,13 +41,15 @@ class DataBase():
 
     
     def load_lock_data(self, date_str):
+        """
+        用于查找指定日期的无活动记录
+        """
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         # 精选 Ar_Group 中名称为 'Away' 和 'Session lock' 的 GroupId
         cursor.execute("SELECT GroupId, Name FROM Ar_Group WHERE Name IN ('Away', 'Session lock')")
         special_gid_map = dict(cursor.fetchall())
 
-        # 用这些 GroupId 精确查 Ar_Activity
         if special_gid_map:
             placeholder = ",".join(["?"] * len(special_gid_map))
             cursor.execute(f"""

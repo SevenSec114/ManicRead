@@ -222,7 +222,6 @@ class UIRenderer():
         ]
         chart_data = json.dumps(series_data, ensure_ascii=False)
     
-        # Inject JavaScript to render the bar chart
         ui.run_javascript(f"""
             window.periodChart = Highcharts.chart('period-gantt-graph', {{
                 chart: {{
