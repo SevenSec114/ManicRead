@@ -114,3 +114,17 @@ class DataBase():
         rows = cursor.fetchall()
         conn.close()
         return {row[0] for row in rows}
+    
+    def get_local_tz(self):
+        """
+        获取当前时区偏移
+        """
+        from tzlocal import get_localzone
+        local_tz = get_localzone()
+        now = datetime.now(local_tz)
+        offset_minutes = now.utcoffset().total_seconds() / 60
+        offset_hours = int(offset_minutes // 60)
+
+        # 格式化成 UTC+8 形式
+        sign = '-' if offset_hours >= 0 else '+'
+        return int(f'{sign}{abs(offset_hours)}')

@@ -101,7 +101,7 @@ class UIRenderer():
             function initChart(data, date_str) {{
                 chart = Highcharts.chart('daily-gantt-graph', {{
                     time: {{
-                        timezoneOffset: -8 * 60
+                        timezoneOffset: {self.db.get_local_tz()} * 60
                     }},
                     chart: {{ type: 'xrange', zoomType: 'x', height: 200 }},
                     title: {{ text: date_str + ' timeline' }},
@@ -187,7 +187,7 @@ class UIRenderer():
                 }});
                 Highcharts.setOptions({{
                     time: {{
-                        timezoneOffset: -8 * 60
+                        timezoneOffset: {self.db.get_local_tz()} * 60
                     }}
                 }});
             }}
