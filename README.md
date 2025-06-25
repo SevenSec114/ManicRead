@@ -28,7 +28,7 @@ git clone https://github.com/SevenSec114/ManicRead.git
 
 ### 依赖
 ```bash
-pip install nicegui
+pip install -r requirements.txt
 ```
 
 ### 运行
@@ -46,3 +46,5 @@ python main.py
     - 添加对 session lock, away 的追踪
     - 添加 Daily 页面动画效果
     - 添加截图展示
+- 2025.06.25
+    - 适配时区
