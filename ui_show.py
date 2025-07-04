@@ -1,6 +1,6 @@
 from nicegui import ui
 from datetime import datetime, date
-import hashlib, json
+import json
 # from nicegui_toolkit import inject_layout_tool
 # inject_layout_tool()
 
@@ -12,17 +12,6 @@ class UIRenderer():
         self.inited = False # 只是用来看另一个tab是否加载
         pass
 
-    def hash_color(self, name):
-        if name == 'Away':
-            return '#ff0000'
-        elif name == 'Session lock':
-            return '#000000'
-        h = hashlib.md5(name.encode()).hexdigest()
-        r = int(h[0:2], 16)
-        g = int(h[2:4], 16)
-        b = int(h[4:6], 16)
-        return f'#{r:02x}{g:02x}{b:02x}'
-    
     def count_animate(self, label, h, m, s):
         """
         统计时长的增长动画
@@ -56,7 +45,7 @@ class UIRenderer():
         for seg in segments:
             if merged_segments and seg[0] == merged_segments[-1][0] and seg[1] == merged_segments[-1][2]:
                 # 合并：更新end_ms
-                merged_segments[-1] = (merged_segments[-1][0], merged_segments[-1][1], seg[2], seg[3], seg[4])
+                merged_segments[-1] = (merged_segments[-1][0], merged_segments[-1][1], seg[2], seg[3], seg[4], seg[5])
             else:
                 merged_segments.append(seg)
         segments = merged_segments
@@ -88,11 +77,12 @@ class UIRenderer():
                 'x': start_ms,
                 'x2': end_ms,
                 'y': 0,
+                'offset': utc_offset,
                 'name': title,
                 'color': color,
                 'rawTitle': raw_title
             }
-            for title, start_ms, end_ms, raw_title, color in segments
+            for title, start_ms, end_ms, utc_offset, raw_title, color in segments
         ]
 
         chart_data = json.dumps(data, ensure_ascii=False)
@@ -106,7 +96,7 @@ class UIRenderer():
             function initChart(data, date_str) {{
                 chart = Highcharts.chart('daily-gantt-graph', {{
                     time: {{
-                        timezoneOffset: {self.db.get_local_tz()} * 60
+                        timezoneOffset: {-data[0]["offset"]} * 60
                     }},
                     chart: {{ type: 'xrange', zoomType: 'x', height: 200 }},
                     title: {{ text: date_str + ' timeline' }},
@@ -192,7 +182,7 @@ class UIRenderer():
                 }});
                 Highcharts.setOptions({{
                     time: {{
-                        timezoneOffset: {self.db.get_local_tz()} * 60
+                        timezoneOffset: {-data[0]["offset"]} * 60
                     }}
                 }});
             }}

@@ -1,2 +1,1 @@
 nicegui==2.20.0
-tzlocal==5.3.1

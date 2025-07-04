@@ -20,7 +20,7 @@ class DataBase():
 
         # 提取活动记录，包括原始标题
         cursor.execute("""
-            SELECT CommonGroupId, StartLocalTime, EndLocalTime, Name
+            SELECT CommonGroupId, StartLocalTime, EndLocalTime, StartUtcTime, Name
             FROM Ar_Activity
             WHERE CommonGroupId IS NOT NULL AND StartLocalTime LIKE ? AND EndLocalTime IS NOT NULL
         """, (f"{date_str}%",))
@@ -30,13 +30,15 @@ class DataBase():
         segments = []
         usage = {}
 
-        for gid, start, end, raw_title in rows:
+        for gid, start, end, utc_start, raw_title in rows:
             title = common_map.get(gid, "(unknown window)")
             color = "#" + color_map.get(gid, "000000")
             t1 = datetime.fromisoformat(start)
             t2 = datetime.fromisoformat(end)
+            utc_t1 = datetime.fromisoformat(utc_start)
+            utc_offset = (t1 - utc_t1).total_seconds() // 3600
             if t2 > t1:
-                segments.append((title, int(t1.timestamp() * 1000), int(t2.timestamp() * 1000), raw_title, color))
+                segments.append((title, int(t1.timestamp() * 1000), int(t2.timestamp() * 1000), utc_offset, raw_title, color))
                 duration = (t2 - t1).total_seconds() / 3600  # 转换为小时
             else:
                 duration = 0
@@ -44,7 +46,7 @@ class DataBase():
             if title in usage:
                 usage[title]['total_usage'] += duration
             else:
-                usage[title] = {'total_usage': duration, 'color': color}
+                usage[title] = { 'total_usage': duration, 'color': color }
 
         return segments, usage
 
@@ -64,7 +66,7 @@ class DataBase():
         if special_gid_map:
             placeholder = ",".join(["?"] * len(special_gid_map))
             cursor.execute(f"""
-                SELECT GroupId, StartLocalTime, EndLocalTime
+                SELECT GroupId, StartLocalTime, EndLocalTime, StartUtcTime
                 FROM Ar_Activity
                 WHERE GroupId IN ({placeholder}) AND StartLocalTime LIKE ? AND EndLocalTime IS NOT NULL AND CommonGroupId IS NULL
             """, list(special_gid_map.keys()) + [f"{date_str}%"])
@@ -72,14 +74,16 @@ class DataBase():
             special_rows = cursor.fetchall()
             segments = []
 
-            for gid, start, end in special_rows:
+            for gid, start, end, utc_start in special_rows:
                 name = special_gid_map.get(gid, "(special)")
                 color = "#" + special_color_map.get(gid, "000000")
                 try:
                     t1 = datetime.fromisoformat(start)
                     t2 = datetime.fromisoformat(end)
+                    utc_t1 = datetime.fromisoformat(utc_start)
+                    utc_offset = (t1 - utc_t1).total_seconds() // 3600
                     if t2 > t1:
-                        segments.append((name, int(t1.timestamp() * 1000), int(t2.timestamp() * 1000), '', color)) # 空字符串代表空 title
+                        segments.append((name, int(t1.timestamp() * 1000), int(t2.timestamp() * 1000), utc_offset, '', color)) # 空字符串代表空 title
                 except Exception:
                     continue
         return segments
@@ -137,17 +141,3 @@ class DataBase():
         rows = cursor.fetchall()
         conn.close()
         return {row[0] for row in rows}
-    
-    def get_local_tz(self):
-        """
-        获取当前时区偏移
-        """
-        from tzlocal import get_localzone
-        local_tz = get_localzone()
-        now = datetime.now(local_tz)
-        offset_minutes = now.utcoffset().total_seconds() / 60
-        offset_hours = int(offset_minutes // 60)
-
-        # 格式化成 UTC 形式
-        sign = '-' if offset_hours >= 0 else '+'
-        return int(f'{sign}{abs(offset_hours)}')
