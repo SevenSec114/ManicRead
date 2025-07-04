@@ -47,7 +47,7 @@ class UIRenderer():
         update()
     
     def daily_render(self, date_str=str(date.today())):
-        common_segments, usage = self.db.load_data(date_str)
+        common_segments, usage_all = self.db.load_data(date_str)
         lock_segments = self.db.load_lock_data(date_str)
         segments = common_segments + lock_segments
 
@@ -56,7 +56,7 @@ class UIRenderer():
         for seg in segments:
             if merged_segments and seg[0] == merged_segments[-1][0] and seg[1] == merged_segments[-1][2]:
                 # 合并：更新end_ms
-                merged_segments[-1] = (merged_segments[-1][0], merged_segments[-1][1], seg[2], seg[3])
+                merged_segments[-1] = (merged_segments[-1][0], merged_segments[-1][1], seg[2], seg[3], seg[4])
             else:
                 merged_segments.append(seg)
         segments = merged_segments
@@ -66,13 +66,17 @@ class UIRenderer():
                 self.daily_total_statistics_container.clear()
                 with ui.card().style('align-self: stretch; height: 100%;'):
                     ui.label("Usage Summary").classes('text-h6').style('align-self: center;')
-                    for app, total_hours in sorted(usage.items(), key=lambda x: x[1], reverse=True):
-                        hours = int(total_hours)
-                        minutes = int((total_hours - hours) * 60)
-                        seconds = int(((total_hours - hours) * 60 - minutes) * 60)
+                    # 依 total_usage 降序排序
+                    sorted_usage = sorted([(title, data) for title, data in usage_all.items()], key=lambda x: x[1]["total_usage"], reverse=True)
+
+                    for title, data in sorted_usage:
+                        total_usage = data["total_usage"]
+                        hours = int(total_usage)
+                        minutes = int((total_usage - hours) * 60)
+                        seconds = int(((total_usage - hours) * 60 - minutes) * 60)
                         with ui.row().style('align-self: end'):
-                            ui.label('■').style(f'color: {self.hash_color(app)}; margin-right: -10px;')
-                            ui.label(f"{app}:").classes('ml-4').style('align-self: end; margin-left: 0; margin-right: -10px;')
+                            ui.label('■').style(f'color: {data["color"]}; margin-right: -10px;')
+                            ui.label(f"{title}:").classes('ml-4').style('align-self: end; margin-left: 0; margin-right: -10px;')
                             label = ui.label(f"00:00:00").classes('ml-4').style('align-self: end; margin-left: 0;')
                             self.count_animate(label, hours, minutes, seconds)
 
@@ -85,11 +89,12 @@ class UIRenderer():
                 'x2': end_ms,
                 'y': 0,
                 'name': title,
-                'color': self.hash_color(title),
+                'color': color,
                 'rawTitle': raw_title
             }
-            for title, start_ms, end_ms, raw_title in segments
+            for title, start_ms, end_ms, raw_title, color in segments
         ]
+
         chart_data = json.dumps(data, ensure_ascii=False)
         categories = json.dumps([""], ensure_ascii=False)
 
@@ -206,19 +211,19 @@ class UIRenderer():
     
         self.inited = True
 
-        usage = self.db.load_data_range(start_date_str, end_date_str)
+        usage_all = self.db.load_data_range(start_date_str, end_date_str)
     
-        # 依时长从高到低排序，过滤低于0.01小时应用
-        sorted_usage = [(app, total) for app, total in sorted(usage.items(), key=lambda x: x[1], reverse=True) if total >= 0.01][:10]
-        categories_list = [app for app, _ in sorted_usage]
+        # 依时长从高到低排序，过滤低于 0.01 小时程式
+        sorted_usage = sorted([(title, data) for title, data in usage_all.items()], key=lambda x: x[1]["total_usage"], reverse=True)[:10]
+        categories_list = [title for title, _ in sorted_usage]
         categories = json.dumps(categories_list, ensure_ascii=False)
         series_data = [
             {
-                "y": round(total, 2),
-                "color": self.hash_color(app),
+                "y": round(data["total_usage"], 2),
+                "color": data["color"],
                 "name": app
             }
-            for app, total in sorted_usage
+            for app, data in sorted_usage
         ]
         chart_data = json.dumps(series_data, ensure_ascii=False)
     

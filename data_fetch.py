@@ -1,5 +1,4 @@
 from datetime import datetime
-from collections import defaultdict
 import sqlite3
 
 class DataBase():
@@ -13,9 +12,11 @@ class DataBase():
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
-        # 映射 CommonGroupId → 分组名称
+        # 映射 CommonGroupId 到分组名称
         cursor.execute("SELECT CommonId, Name FROM Ar_CommonGroup")
         common_map = dict(cursor.fetchall())
+        cursor.execute("SELECT CommonId, Color FROM Ar_CommonGroup")
+        color_map = dict(cursor.fetchall())
 
         # 提取活动记录，包括原始标题
         cursor.execute("""
@@ -27,15 +28,23 @@ class DataBase():
         conn.close()
 
         segments = []
-        usage = defaultdict(float)
+        usage = {}
 
         for gid, start, end, raw_title in rows:
             title = common_map.get(gid, "(unknown window)")
+            color = "#" + color_map.get(gid, "000000")
             t1 = datetime.fromisoformat(start)
             t2 = datetime.fromisoformat(end)
             if t2 > t1:
-                segments.append((title, int(t1.timestamp() * 1000), int(t2.timestamp() * 1000), raw_title))
-                usage[title] += (t2 - t1).total_seconds() / 3600
+                segments.append((title, int(t1.timestamp() * 1000), int(t2.timestamp() * 1000), raw_title, color))
+                duration = (t2 - t1).total_seconds() / 3600  # 转换为小时
+            else:
+                duration = 0
+
+            if title in usage:
+                usage[title]['total_usage'] += duration
+            else:
+                usage[title] = {'total_usage': duration, 'color': color}
 
         return segments, usage
 
@@ -49,13 +58,15 @@ class DataBase():
         # 精选 Ar_Group 中名称为 'Away' 和 'Session lock' 的 GroupId
         cursor.execute("SELECT GroupId, Name FROM Ar_Group WHERE Name IN ('Away', 'Session lock')")
         special_gid_map = dict(cursor.fetchall())
+        cursor.execute("SELECT GroupId, Color FROM Ar_Group WHERE Name IN ('Away', 'Session lock')")
+        special_color_map = dict(cursor.fetchall())
 
         if special_gid_map:
             placeholder = ",".join(["?"] * len(special_gid_map))
             cursor.execute(f"""
                 SELECT GroupId, StartLocalTime, EndLocalTime
                 FROM Ar_Activity
-                WHERE GroupId IN ({placeholder}) AND StartLocalTime LIKE ? AND EndLocalTime IS NOT NULL
+                WHERE GroupId IN ({placeholder}) AND StartLocalTime LIKE ? AND EndLocalTime IS NOT NULL AND CommonGroupId IS NULL
             """, list(special_gid_map.keys()) + [f"{date_str}%"])
 
             special_rows = cursor.fetchall()
@@ -63,11 +74,12 @@ class DataBase():
 
             for gid, start, end in special_rows:
                 name = special_gid_map.get(gid, "(special)")
+                color = "#" + special_color_map.get(gid, "000000")
                 try:
                     t1 = datetime.fromisoformat(start)
                     t2 = datetime.fromisoformat(end)
                     if t2 > t1:
-                        segments.append((name, int(t1.timestamp() * 1000), int(t2.timestamp() * 1000), '')) # 空字符串代表空 title
+                        segments.append((name, int(t1.timestamp() * 1000), int(t2.timestamp() * 1000), '', color)) # 空字符串代表空 title
                 except Exception:
                     continue
         return segments
@@ -80,6 +92,8 @@ class DataBase():
         cursor = conn.cursor()
         cursor.execute("SELECT CommonId, Name FROM Ar_CommonGroup")
         common_map = dict(cursor.fetchall())
+        cursor.execute("SELECT CommonId, Color FROM Ar_CommonGroup")
+        color_map = dict(cursor.fetchall())
         cursor.execute("""
             SELECT CommonGroupId, StartLocalTime, EndLocalTime
             FROM Ar_Activity
@@ -90,14 +104,23 @@ class DataBase():
         rows = cursor.fetchall()
         conn.close()
 
-        usage = defaultdict(float)
+        usage = {}
 
         for gid, start, end in rows:
             title = common_map.get(gid, "(unknown window)")
+            color = "#" + color_map.get(gid, "000000")
             t1 = datetime.fromisoformat(start)
             t2 = datetime.fromisoformat(end)
+            
             if t2 > t1:
-                usage[title] += (t2 - t1).total_seconds() / 3600
+                duration = (t2 - t1).total_seconds() / 3600  # 转换为小时
+            else:
+                duration = 0
+
+            if title in usage:
+                usage[title]['total_usage'] += duration
+            else:
+                usage[title] = {'total_usage': duration, 'color': color}
         return usage
 
     def get_available_dates(self):
@@ -125,6 +148,6 @@ class DataBase():
         offset_minutes = now.utcoffset().total_seconds() / 60
         offset_hours = int(offset_minutes // 60)
 
-        # 格式化成 UTC+8 形式
+        # 格式化成 UTC 形式
         sign = '-' if offset_hours >= 0 else '+'
         return int(f'{sign}{abs(offset_hours)}')
