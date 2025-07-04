@@ -36,7 +36,7 @@ class UIRenderer():
         update()
     
     def daily_render(self, date_str=str(date.today())):
-        common_segments, usage_all = self.db.load_data(date_str)
+        common_segments, usage_all, offset = self.db.load_data(date_str)
         lock_segments = self.db.load_lock_data(date_str)
         segments = common_segments + lock_segments
 
@@ -45,7 +45,7 @@ class UIRenderer():
         for seg in segments:
             if merged_segments and seg[0] == merged_segments[-1][0] and seg[1] == merged_segments[-1][2]:
                 # 合并：更新end_ms
-                merged_segments[-1] = (merged_segments[-1][0], merged_segments[-1][1], seg[2], seg[3], seg[4], seg[5])
+                merged_segments[-1] = (merged_segments[-1][0], merged_segments[-1][1], seg[2], seg[3], seg[4])
             else:
                 merged_segments.append(seg)
         segments = merged_segments
@@ -77,12 +77,11 @@ class UIRenderer():
                 'x': start_ms,
                 'x2': end_ms,
                 'y': 0,
-                'offset': utc_offset,
                 'name': title,
                 'color': color,
                 'rawTitle': raw_title
             }
-            for title, start_ms, end_ms, utc_offset, raw_title, color in segments
+            for title, start_ms, end_ms, raw_title, color in segments
         ]
 
         chart_data = json.dumps(data, ensure_ascii=False)
@@ -96,7 +95,7 @@ class UIRenderer():
             function initChart(data, date_str) {{
                 chart = Highcharts.chart('daily-gantt-graph', {{
                     time: {{
-                        timezoneOffset: {-data[0]["offset"]} * 60
+                        timezoneOffset: {-offset} * 60
                     }},
                     chart: {{ type: 'xrange', zoomType: 'x', height: 200 }},
                     title: {{ text: date_str + ' timeline' }},
@@ -182,7 +181,7 @@ class UIRenderer():
                 }});
                 Highcharts.setOptions({{
                     time: {{
-                        timezoneOffset: {-data[0]["offset"]} * 60
+                        timezoneOffset: {-offset} * 60
                     }}
                 }});
             }}
