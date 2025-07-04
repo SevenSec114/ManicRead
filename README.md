@@ -53,3 +53,4 @@ python main.py
     - 适配时区
 - 2025.07.04
     - 修复 session lock 和 away 和正常应用冲突问题
+    - utc 偏移算法直接来源于 manictime 数据
